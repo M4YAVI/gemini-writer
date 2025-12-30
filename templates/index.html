@@ -1,103 +1,335 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gemini Writer</title>
+    <title>Gemini Studio</title>
     <link rel="stylesheet" href="/static/style.css">
-</head>
-<body>
-    <header>
-        <div class="logo">
-            <span class="icon">◈</span>
-            <span class="title">Gemini Writer</span>
-        </div>
-        <a href="/clear" class="clear-btn">Clear</a>
-    </header>
-
-    <main id="chat-messages">
-        {% for msg in messages %}
-        <div class="message {{ msg.role }}">
-            <div class="bubble">{{ msg.content }}</div>
-        </div>
-        {% endfor %}
-    </main>
-
-    <footer>
-        <form id="chat-form" action="/chat" method="POST">
-            <input type="text" name="prompt" id="prompt-input" placeholder="Type your story idea..." autocomplete="off" required>
-            <button type="submit" id="send-btn">Send</button>
-        </form>
-    </footer>
-
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</head>
+
+<body>
+    <div class="app-layout">
+        <!-- Sidebar -->
+        <nav class="sidebar">
+            <div class="sidebar-header">
+                <div class="logo">
+                    <i data-lucide="sparkles" class="logo-icon"></i>
+                    <span class="logo-text">Gemini Studio</span>
+                </div>
+                <div class="sidebar-actions">
+                    <a href="/" class="icon-btn" title="New Chat"><i data-lucide="plus"></i></a>
+                    <a href="/clear" class="icon-btn" title="Clear History"><i data-lucide="trash-2"></i></a>
+                </div>
+            </div>
+
+            <div class="history-section">
+                <div class="section-label">HISTORY</div>
+                <div class="history-list">
+                    {% for msg in messages if msg.role == 'user' %}
+                    <div class="history-item">
+                        <i data-lucide="file-text" class="item-icon"></i>
+                        <span class="item-text">{{ msg.content[:25] }}...</span>
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="sidebar-footer">
+                <div class="user-profile">
+                    <div class="avatar">G</div>
+                    <div class="user-info">
+                        <span class="user-name">Guest User</span>
+                        <span class="user-plan">Pro Plan</span>
+                    </div>
+                </div>
+                <button class="settings-trigger" onclick="openSettings()">
+                    <i data-lucide="settings"></i>
+                </button>
+            </div>
+        </nav>
+
+        <!-- Main Workspace -->
+        <main class="workspace">
+            <header class="top-bar">
+                <div class="model-selector" onclick="openSettings()">
+                    <div class="status-dot"></div>
+                    <span class="current-model-name">{{ settings.model.split('/')[-1] }}</span>
+                    <i data-lucide="chevron-down" class="chevron"></i>
+                </div>
+                <div class="window-controls">
+                    <!-- Decorative visuals -->
+                </div>
+            </header>
+
+            <div id="scroll-container" class="scroll-container">
+                <div class="content-width">
+                    {% if not messages %}
+                    <div class="welcome-hero">
+                        <h1 class="hero-title">Craft Your Masterpiece</h1>
+                        <p class="hero-subtitle">Collaborate with Gemini to write compelling narratives.</p>
+                        <div class="suggestion-chips">
+                            <button class="chip"
+                                onclick="setInput('Write a cyberpunk noir story set in Neo-Tokyo.')">Cyberpunk
+                                Noir</button>
+                            <button class="chip" onclick="setInput('A ghost story about a lighthouse keeper.')">Ghost
+                                Story</button>
+                            <button class="chip" onclick="setInput('Explain quantum physics like a pirate.')">Pirate
+                                Physics</button>
+                        </div>
+                    </div>
+                    {% else %}
+                    {% for msg in messages %}
+                    <div class="message-group {{ 'user' if msg.role == 'user' else 'assistant' }} fade-in">
+                        <div class="message-avatar {{ 'bot' if msg.role == 'assistant' else '' }}">
+                            <i data-lucide="{{ 'sparkles' if msg.role == 'assistant' else 'user' }}"></i>
+                        </div>
+                        <!-- Container for content -->
+                        <div class="message-content markdown-body"></div>
+                        <!-- Hidden payload -->
+                        <script type="application/json" class="msg-payload">{{ msg.content | tojson }}</script>
+                    </div>
+                    {% endfor %}
+                    {% endif %}
+                </div>
+            </div>
+
+            <div class="input-container">
+                <div class="input-width">
+                    <form id="chat-form" class="input-box">
+                        <textarea name="prompt" id="prompt-input" placeholder="Type a message to start writing..."
+                            rows="1" required></textarea>
+                        <button type="submit" id="send-btn" class="send-btn">
+                            <i data-lucide="arrow-up"></i>
+                        </button>
+                    </form>
+                    <div class="input-footer">
+                        <span>Gemini can make mistakes. Review generated output.</span>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Settings Overlay -->
+    <div id="settings-overlay" class="overlay">
+        <div class="settings-modal">
+            <div class="modal-header">
+                <h2>Preferences</h2>
+                <button class="close-btn" onclick="closeSettings()"><i data-lucide="x"></i></button>
+            </div>
+            <div class="modal-body">
+                <form id="settings-form" action="/api/settings" method="POST">
+                    <div class="setting-group">
+                        <label>AI Provider</label>
+                        <div class="select-field">
+                            <select name="provider" id="provider" onchange="fetchModels()">
+                                <option value="openrouter" {% if settings.provider=='openrouter' %}selected{% endif %}>
+                                    OpenRouter</option>
+                                <option value="gemini" {% if settings.provider=='gemini' %}selected{% endif %}>Google
+                                    Gemini</option>
+                            </select>
+                            <i data-lucide="chevron-down" class="field-arrow"></i>
+                        </div>
+                    </div>
+                    <div class="setting-group">
+                        <label>Model</label>
+                        <div class="select-field">
+                            <select name="model" id="model-select">
+                                <option value="{{ settings.model }}">{{ settings.model }}</option>
+                            </select>
+                            <i data-lucide="chevron-down" class="field-arrow"></i>
+                        </div>
+                    </div>
+                    <hr class="divider">
+                    <div class="setting-group" id="openrouter-input">
+                        <label>OpenRouter API Key</label>
+                        <div class="input-field">
+                            <input type="password" name="openrouter_api_key" value="{{ settings.openrouter_api_key }}"
+                                placeholder="sk-or-...">
+                        </div>
+                    </div>
+                    <div class="setting-group" id="gemini-input">
+                        <label>Gemini API Key</label>
+                        <div class="input-field">
+                            <input type="password" name="gemini_api_key" value="{{ settings.gemini_api_key }}"
+                                placeholder="AIza...">
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="submit" class="save-btn">Save Changes</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
     <script>
-        // Render markdown
-        document.querySelectorAll('.message.assistant .bubble').forEach(el => {
-            el.innerHTML = marked.parse(el.textContent);
+        // --- Initialization ---
+        document.addEventListener('DOMContentLoaded', () => {
+            lucide.createIcons();
+            hydrateMessages();
+            fetchModels();
+            autoResizeTextarea();
+            scrollToBottom();
         });
 
-        // Handle form submit with streaming
+        // Use marked to render markdown
+        function hydrateMessages() {
+            document.querySelectorAll('.message-group').forEach(group => {
+                const payload = group.querySelector('.msg-payload');
+                const contentDiv = group.querySelector('.message-content');
+
+                if (payload && contentDiv && !contentDiv.innerHTML.trim()) {
+                    try {
+                        const rawText = JSON.parse(payload.textContent);
+                        contentDiv.innerHTML = marked.parse(rawText);
+                    } catch (e) {
+                        console.error('Hydration error:', e);
+                        contentDiv.textContent = "Error loading message.";
+                    }
+                }
+            });
+        }
+
+        const promptInput = document.getElementById('prompt-input');
+        const scrollContainer = document.getElementById('scroll-container');
+
+        function setInput(text) {
+            promptInput.value = text;
+            autoResizeTextarea();
+            promptInput.focus();
+        }
+
+        function scrollToBottom() {
+            scrollContainer.scrollTo({ top: scrollContainer.scrollHeight, behavior: 'smooth' });
+        }
+
+        function autoResizeTextarea() {
+            promptInput.style.height = 'auto';
+            promptInput.style.height = promptInput.scrollHeight + 'px';
+            if (!promptInput.value) promptInput.style.height = 'auto';
+        }
+        promptInput.addEventListener('input', autoResizeTextarea);
+
+        // --- Chat Logic ---
         document.getElementById('chat-form').addEventListener('submit', async (e) => {
             e.preventDefault();
-            const input = document.getElementById('prompt-input');
-            const prompt = input.value.trim();
+            const prompt = promptInput.value.trim();
             if (!prompt) return;
 
-            const messages = document.getElementById('chat-messages');
-            const sendBtn = document.getElementById('send-btn');
-            
-            // Disable input
-            input.disabled = true;
-            sendBtn.disabled = true;
+            // Clear welcome
+            const hero = document.querySelector('.welcome-hero');
+            if (hero) hero.remove();
 
-            // Add user message
-            messages.innerHTML += `<div class="message user"><div class="bubble">${prompt}</div></div>`;
-            
-            // Add loading message
-            const loadingId = 'loading-' + Date.now();
-            messages.innerHTML += `<div class="message assistant" id="${loadingId}"><div class="bubble loading">● ● ●</div></div>`;
-            messages.scrollTop = messages.scrollHeight;
+            const container = document.querySelector('.content-width');
+
+            // 1. Add User Msg
+            const userMsg = document.createElement('div');
+            userMsg.className = 'message-group user fade-in';
+            userMsg.innerHTML = `
+                <div class="message-avatar"><i data-lucide="user"></i></div>
+                <div class="message-content">${escapeHtml(prompt)}</div>
+            `;
+            container.appendChild(userMsg);
+
+            // 2. Add Assistant Msg
+            const aiMsg = document.createElement('div');
+            aiMsg.className = 'message-group assistant fade-in';
+            aiMsg.innerHTML = `
+                <div class="message-avatar bot"><i data-lucide="sparkles"></i></div>
+                <div class="message-content markdown-body typing-cursor"></div>
+            `;
+            container.appendChild(aiMsg);
+            lucide.createIcons();
+            scrollToBottom();
+
+            const contentDiv = aiMsg.querySelector('.message-content');
+            const sendBtn = document.getElementById('send-btn');
+
+            promptInput.disabled = true;
+            sendBtn.disabled = true;
+            promptInput.value = '';
+            autoResizeTextarea();
 
             try {
                 const response = await fetch('/chat', {
                     method: 'POST',
-                    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
                     body: 'prompt=' + encodeURIComponent(prompt)
                 });
 
                 const reader = response.body.getReader();
                 const decoder = new TextDecoder();
                 let fullText = '';
-                const loadingEl = document.getElementById(loadingId);
 
                 while (true) {
-                    const {done, value} = await reader.read();
+                    const { done, value } = await reader.read();
                     if (done) break;
-                    
-                    const chunk = decoder.decode(value);
-                    fullText += chunk;
-                    
-                    if (loadingEl) {
-                        loadingEl.querySelector('.bubble').innerHTML = marked.parse(fullText);
-                        loadingEl.querySelector('.bubble').classList.remove('loading');
-                    }
-                    messages.scrollTop = messages.scrollHeight;
+                    fullText += decoder.decode(value);
+                    contentDiv.innerHTML = marked.parse(fullText);
+                    scrollToBottom();
                 }
             } catch (err) {
-                const loadingEl = document.getElementById(loadingId);
-                if (loadingEl) {
-                    loadingEl.querySelector('.bubble').textContent = 'Error: ' + err.message;
-                    loadingEl.querySelector('.bubble').classList.add('error');
-                }
+                contentDiv.innerHTML = `<span style="color:red">Error: ${err.message}</span>`;
             }
 
-            // Reset form
-            input.value = '';
-            input.disabled = false;
+            contentDiv.classList.remove('typing-cursor');
+            promptInput.disabled = false;
             sendBtn.disabled = false;
-            input.focus();
+            promptInput.focus();
+        });
+
+        // --- Settings / Utils ---
+        async function fetchModels() {
+            try {
+                const res = await fetch('/api/models');
+                const models = await res.json();
+                const provider = document.getElementById('provider').value;
+                const select = document.getElementById('model-select');
+                const currentModel = "{{ settings.model }}";
+
+                select.innerHTML = '';
+                if (models[provider]) {
+                    models[provider].forEach(m => {
+                        const opt = document.createElement('option');
+                        opt.value = m.id;
+                        opt.textContent = m.name;
+                        if (m.id === currentModel) opt.selected = true;
+                        select.appendChild(opt);
+                    });
+                }
+
+                document.getElementById('openrouter-input').style.display = provider === 'openrouter' ? 'block' : 'none';
+                document.getElementById('gemini-input').style.display = provider === 'gemini' ? 'block' : 'none';
+            } catch (e) { console.error(e); }
+        }
+
+        const settingsOverlay = document.getElementById('settings-overlay');
+        function openSettings() { settingsOverlay.classList.add('visible'); fetchModels(); }
+        function closeSettings() { settingsOverlay.classList.remove('visible'); }
+        settingsOverlay.addEventListener('click', e => { if (e.target === settingsOverlay) closeSettings(); });
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        promptInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                document.getElementById('chat-form').dispatchEvent(new Event('submit'));
+            }
         });
     </script>
 </body>
+
 </html>

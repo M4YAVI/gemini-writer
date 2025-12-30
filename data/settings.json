@@ -1,0 +1,6 @@
+{
+  "provider": "openrouter",
+  "model": "xiaomi/mimo-v2-flash:free",
+  "openrouter_api_key": "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",
+  "gemini_api_key": "AIzaSyAerS2p_JERzq2bFuzvv3xjfMTgNeB9J8A"
+}

@@ -2361,6 +2361,9 @@ openai = [
     { name = "openai" },
     { name = "tiktoken" },
 ]
+openrouter = [
+    { name = "openai" },
+]
 retries = [
     { name = "tenacity" },
 ]
@@ -3039,6 +3042,7 @@ dependencies = [
     { name = "jinja2" },
     { name = "logfire" },
     { name = "pydantic-ai" },
+    { name = "pydantic-ai-slim", extra = ["openrouter"] },
     { name = "python-dotenv" },
     { name = "python-fasthtml" },
     { name = "python-multipart" },
@@ -3052,6 +3056,7 @@ requires-dist = [
     { name = "jinja2", specifier = ">=3.1.6" },
     { name = "logfire", specifier = ">=4.16.0" },
     { name = "pydantic-ai", extras = ["google"], specifier = ">=1.39.0" },
+    { name = "pydantic-ai-slim", extras = ["openrouter"], specifier = ">=1.39.0" },
     { name = "python-dotenv", specifier = ">=1.2.1" },
     { name = "python-fasthtml", specifier = ">=0.12.36" },
     { name = "python-multipart", specifier = ">=0.0.21" },
