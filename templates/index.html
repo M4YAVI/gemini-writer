@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gemini Writer</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <header>
+        <div class="logo">
+            <span class="icon">◈</span>
+            <span class="title">Gemini Writer</span>
+        </div>
+        <a href="/clear" class="clear-btn">Clear</a>
+    </header>
+
+    <main id="chat-messages">
+        {% for msg in messages %}
+        <div class="message {{ msg.role }}">
+            <div class="bubble">{{ msg.content }}</div>
+        </div>
+        {% endfor %}
+    </main>
+
+    <footer>
+        <form id="chat-form" action="/chat" method="POST">
+            <input type="text" name="prompt" id="prompt-input" placeholder="Type your story idea..." autocomplete="off" required>
+            <button type="submit" id="send-btn">Send</button>
+        </form>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <script>
+        // Render markdown
+        document.querySelectorAll('.message.assistant .bubble').forEach(el => {
+            el.innerHTML = marked.parse(el.textContent);
+        });
+
+        // Handle form submit with streaming
+        document.getElementById('chat-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const input = document.getElementById('prompt-input');
+            const prompt = input.value.trim();
+            if (!prompt) return;
+
+            const messages = document.getElementById('chat-messages');
+            const sendBtn = document.getElementById('send-btn');
+            
+            // Disable input
+            input.disabled = true;
+            sendBtn.disabled = true;
+
+            // Add user message
+            messages.innerHTML += `<div class="message user"><div class="bubble">${prompt}</div></div>`;
+            
+            // Add loading message
+            const loadingId = 'loading-' + Date.now();
+            messages.innerHTML += `<div class="message assistant" id="${loadingId}"><div class="bubble loading">● ● ●</div></div>`;
+            messages.scrollTop = messages.scrollHeight;
+
+            try {
+                const response = await fetch('/chat', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/x-www-form-urlencoded'},
+                    body: 'prompt=' + encodeURIComponent(prompt)
+                });
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let fullText = '';
+                const loadingEl = document.getElementById(loadingId);
+
+                while (true) {
+                    const {done, value} = await reader.read();
+                    if (done) break;
+                    
+                    const chunk = decoder.decode(value);
+                    fullText += chunk;
+                    
+                    if (loadingEl) {
+                        loadingEl.querySelector('.bubble').innerHTML = marked.parse(fullText);
+                        loadingEl.querySelector('.bubble').classList.remove('loading');
+                    }
+                    messages.scrollTop = messages.scrollHeight;
+                }
+            } catch (err) {
+                const loadingEl = document.getElementById(loadingId);
+                if (loadingEl) {
+                    loadingEl.querySelector('.bubble').textContent = 'Error: ' + err.message;
+                    loadingEl.querySelector('.bubble').classList.add('error');
+                }
+            }
+
+            // Reset form
+            input.value = '';
+            input.disabled = false;
+            sendBtn.disabled = false;
+            input.focus();
+        });
+    </script>
+</body>
+</html>
